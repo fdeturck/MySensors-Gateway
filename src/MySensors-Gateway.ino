@@ -21,7 +21,7 @@
  *
  * REVISION HISTORY
  * Version 1.0 - Henrik Ekblad
- * 
+ *
  * DESCRIPTION
  * The ESP8266 MQTT gateway sends radio network (or locally attached sensors) data to your MQTT broker.
  * The node also listens to MY_MQTT_TOPIC_PREFIX and sends out those messages to the radio network
@@ -30,17 +30,17 @@
  * - To use the feature, uncomment WITH_LEDS_BLINKING in MyConfig.h
  * - RX (green) - blink fast on radio message recieved. In inclusion mode will blink fast only on presentation recieved
  * - TX (yellow) - blink fast on radio message transmitted. In inclusion mode will blink slowly
- * - ERR (red) - fast blink on error during transmission error or recieve crc error  
- * 
+ * - ERR (red) - fast blink on error during transmission error or recieve crc error
+ *
  * See http://www.mysensors.org/build/esp8266_gateway for wiring instructions.
  * nRF24L01+  ESP8266
  * VCC        VCC
- * CE         GPIO4          
+ * CE         GPIO4
  * CSN/CS     GPIO15
  * SCK        GPIO14
  * MISO       GPIO12
  * MOSI       GPIO13
- *            
+ *
  * Not all ESP8266 modules have all pins available on their external interface.
  * This code has been tested on an ESP-12 module.
  * The ESP8266 requires a certain pin configuration to download code, and another one to run code:
@@ -49,10 +49,10 @@
  * - Connect CH_PD via 10K resistor to VCC
  * - Connect GPIO2 via 10K resistor to VCC
  * - Connect GPIO0 via 10K resistor to VCC, and via switch to GND ('bootload switch')
- * 
+ *
   * Inclusion mode button:
  * - Connect GPIO5 via switch to GND ('inclusion switch')
- * 
+ *
  * Hardware SHA204 signing is currently not supported!
  *
  * Make sure to fill in your ssid and WiFi password below for ssid & pass.
@@ -60,13 +60,13 @@
 
 #include <EEPROM.h>
 #include <SPI.h>
-#include <DHT.h>
+#include <SimpleDHT.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
 // Enable debug prints to serial monitor
-#define MY_DEBUG 
+#define MY_DEBUG
 
 // Use a bit lower baudrate for serial prints on ESP8266 than default in MyConfig.h
 #define MY_BAUD_RATE 9600
@@ -97,7 +97,7 @@
 #define MY_ESP8266_PASSWORD "internet"
 
 // Set the hostname for the WiFi Client. This is the hostname
-// it will pass to the DHCP server if not static. 
+// it will pass to the DHCP server if not static.
 // #define MY_ESP8266_HOSTNAME "mqtt-sensor-gateway"
 
 // Enable MY_IP_ADDRESS here if you want a static ip address (no DHCP)
@@ -108,11 +108,11 @@
 #define MY_IP_SUBNET_ADDRESS 255,255,255,0
 
 
-// MQTT broker ip address.  
+// MQTT broker ip address.
 #define MY_CONTROLLER_IP_ADDRESS 192, 168, 1, 156
 
-// The MQTT broker port to to open 
-#define MY_PORT 1883      
+// The MQTT broker port to to open
+#define MY_PORT 1883
 
  /*
 // Flash leds on rx/tx/err
@@ -125,9 +125,9 @@
 // Enable Inclusion mode button on gateway
 #define MY_INCLUSION_BUTTON_FEATURE
 // Set inclusion mode duration (in seconds)
-#define MY_INCLUSION_MODE_DURATION 60 
+#define MY_INCLUSION_MODE_DURATION 60
 // Digital pin used for inclusion mode button
-#define MY_INCLUSION_MODE_BUTTON_PIN  3 
+#define MY_INCLUSION_MODE_BUTTON_PIN  3
 
 #define MY_DEFAULT_ERR_LED_PIN 16  // Error led pin
 #define MY_DEFAULT_RX_LED_PIN  16  // Receive led pin
@@ -140,8 +140,8 @@
 #define CHILD_ID_HUM 0
 #define CHILD_ID_TEMP 1
 #define CHILD_ID_CONTACTEUR 2
-#define CONTACTEUR_PIN D3          // Broche sur laquelle est attaché le contacteur 
-#define DHT_DATA_PIN 2 //D4
+#define CONTACTEUR_PIN D3          // Broche sur laquelle est attaché le contacteur
+#define DHT11_PIN 2 //D4
 
 #define SENSOR_TEMP_OFFSET -1
 // Sleep time between sensor updates (in milliseconds)
@@ -152,18 +152,18 @@ static const uint64_t UPDATE_INTERVAL = 60000;
 // timestamp of the last update doesn't show something like 3 hours in the unlikely case, that
 // the value didn't change since;
 // i.e. the sensor would force sending an update every UPDATE_INTERVAL*FORCE_UPDATE_N_READS [ms]
-static const uint8_t FORCE_UPDATE_N_READS = 5000;
+static const uint16_t FORCE_UPDATE_N_READS = 5000;
 
 
 MyMessage msgContacteur(CHILD_ID_CONTACTEUR, V_TRIPPED);
 MyMessage msgHum(CHILD_ID_HUM, V_HUM);
 MyMessage msgTemp(CHILD_ID_TEMP, V_TEMP);
-DHT dht;
+SimpleDHT11 dht11;
 boolean etatPrecedent = false;
-float humidity = 0;
-float temperature = 0;
-float lastTemp;
-float lastHum;
+byte humidity = 0;
+byte temperature = 0;
+byte lastTemp;
+byte lastHum;
 uint8_t nNoUpdatesTemp;
 uint8_t nNoUpdatesHum;
 bool metric = true;
@@ -232,7 +232,7 @@ int initialHours = 00;//variable to initiate hours
 int initialMins = 0;//variable to initiate minutes
 int initialSecs = 00;//variable to initiate seconds
 bool timeReceived = false;
-unsigned long lastUpdate=0, lastRequest=0, lastTempTime=0, lastHumTime=0; 
+unsigned long lastUpdate=0, lastRequest=0, lastTempTime=0, lastHumTime=0;
 
 /* Useful Constants */
 #define SECS_PER_MIN  (60UL)
@@ -240,27 +240,27 @@ unsigned long lastUpdate=0, lastRequest=0, lastTempTime=0, lastHumTime=0;
 #define SECS_PER_DAY  (SECS_PER_HOUR * 24L)
 
 /* Useful Macros for getting elapsed time */
-#define numberOfSeconds(_time_) (_time_ % SECS_PER_MIN)  
-#define numberOfMinutes(_time_) ((_time_ / SECS_PER_MIN) % SECS_PER_MIN) 
+#define numberOfSeconds(_time_) (_time_ % SECS_PER_MIN)
+#define numberOfMinutes(_time_) ((_time_ / SECS_PER_MIN) % SECS_PER_MIN)
 #define numberOfHours(_time_) (( _time_% SECS_PER_DAY) / SECS_PER_HOUR)
-#define elapsedDays(_time_) ( _time_ / SECS_PER_DAY)  
+#define elapsedDays(_time_) ( _time_ / SECS_PER_DAY)
 
 /////////////////////// SETUP //////////////////
 
 void presentation() {
   sendSketchInfo("GatewayWemos+DHT+MQTT-nonNRF", "1.0");
   Serial.println("sendSketchInfo(GatewayWemos+DHT+MQTT-nonNRF, 1.0)");
-  present(CHILD_ID_CONTACTEUR, S_DOOR); 
+  present(CHILD_ID_CONTACTEUR, S_DOOR);
   Serial.println("CHILD_ID_CONTACTEUR, S_DOOR");
   present(CHILD_ID_HUM, S_HUM);
   Serial.println("CHILD_ID_HUM, S_HUM");
   present(CHILD_ID_TEMP, S_TEMP);
   Serial.println("CHILD_ID_TEMP, S_TEMP");
-  metric = getConfig().isMetric;
+  metric = getControllerConfig().isMetric;
 }
 
 void receiveTime(unsigned long controllerTime) {
-  // Ok, set incoming time 
+  // Ok, set incoming time
   Serial.print("Time value received: ");
   Serial.println(controllerTime);
   //RTC.set(controllerTime); // this sets the RTC to the time from controller - which we do want periodically
@@ -276,13 +276,9 @@ void setup() {
   // Activate internal pull-ups
   digitalWrite(CONTACTEUR_PIN, HIGH);
 
-  dht.setup(DHT_DATA_PIN); // set data pin of DHT sensor
-  if (UPDATE_INTERVAL <= dht.getMinimumSamplingPeriod()) {
-    Serial.println("Warning: UPDATE_INTERVAL is smaller than supported by the sensor!");
-  }
   // Sleep for the time of the minimum sampling period to give the sensor time to power up
   // (otherwise, timeout errors might occure for the first reading)
-  wait(dht.getMinimumSamplingPeriod());
+  wait(2000);
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 64x48)
   // init done
@@ -300,23 +296,23 @@ void setup() {
 /////////////////////// SETUP //////////////////
 
 void loop() {
-  
+
   unsigned long now = millis();
 
   if ((!timeReceived && (now-lastRequest) > (10UL*1000UL*10UL))
     || (timeReceived && (now-lastRequest) > (60UL*1000UL*60UL))) {
-    // Request time from controller. 
+    // Request time from controller.
     Serial.println("requesting time");
-    requestTime();  
+    requestTime();
     lastRequest = now;
   }
 
-  
+
   // Lit l'état du contacteur
-  etat = digitalRead( CONTACTEUR_PIN );  
+  etat = digitalRead( CONTACTEUR_PIN );
   if (etat != etatPrecedent) {
     etatPrecedent = etat;
-  
+
     Serial.print("Etat du contacteur ");
     Serial.println(etat ? "Ouvert " : "Ferme" );
     send( msgContacteur.set( etat ? "1" : "0" ) );
@@ -325,29 +321,35 @@ void loop() {
    ////////  TEMP HUM ////////
   // Force reading sensor, so it works also after sleep()
   //dht.readSensor(true);
-  
+
   ////////  TEMP ////////
   // Get temperature from DHT library
-  
-  if (lastTempTime + UPDATE_INTERVAL < now){ 
+
+  if (lastTempTime + UPDATE_INTERVAL < now){
     lastTempTime = now;
-    temperature = dht.getTemperature();
-    if(isnan(temperature)){
-      Serial.println("Failed reading temperature from DHT");
-    }else{
-      #ifdef MY_DEBUG
-      Serial.print("T brut: ");
-      Serial.println(temperature);
-      #endif
-      temperature = temperature + SENSOR_TEMP_OFFSET;
-      #ifdef MY_DEBUG
-      Serial.print("T corr.: ");
-      Serial.println(temperature);
-      #endif
+
+    if (dht11.read(DHT11_PIN, &temperature, &humidity, NULL)) {
+      Serial.print("Read DHT11 failed.");
     }
-    
+
+    #ifdef MY_DEBUG
+    Serial.print("T brut: ");
+    Serial.println(temperature);
+    #endif
+    if(isnan(temperature)){
+      Serial.println("Failed reading humidity from DHT");
+    }else{
+      temperature = temperature + SENSOR_TEMP_OFFSET;
+    }
+
+    #ifdef MY_DEBUG
+    Serial.print("T corr.: ");
+    Serial.println(temperature);
+    #endif
+
+    //sending values
     if (temperature != lastTemp || nNoUpdatesTemp == FORCE_UPDATE_N_READS) {
-      // Only send humidity if it changed since the last measurement or if we didn't send an update for n times
+      // Only send value if it changed since the last measurement or if we didn't send an update for n times
       lastTemp = temperature;
       // Reset no updates counter
       nNoUpdatesTemp = 0;
@@ -360,19 +362,24 @@ void loop() {
 
   ////////  HUMIDITY ////////
   // Get humidity from DHT library
-  if (lastHumTime + UPDATE_INTERVAL < now){ 
+  if (lastHumTime + UPDATE_INTERVAL < now){
     lastHumTime = now;
-    humidity = dht.getHumidity();
+
+    if (dht11.read(DHT11_PIN, &temperature, &humidity, NULL)) {
+      Serial.print("Read DHT11 failed.");
+    }
+
     if(isnan(humidity)){
       Serial.println("Failed reading humidity from DHT");
     }else{
-      humidity = humidity+10; 
+      humidity = humidity+10;
     }
     #ifdef MY_DEBUG
     Serial.print("H: ");
     Serial.println(humidity);
     #endif
-    
+
+    //send value
     if (humidity != lastHum || nNoUpdatesHum == FORCE_UPDATE_N_READS) {
       // Only send humidity if it changed since the last measurement or if we didn't send an update for n times
       lastHum = humidity;
@@ -385,7 +392,7 @@ void loop() {
     }
   }
 
-  
+
   if (lastDraw + CLOCK_SPEED < millis())
   {
     lastDraw = millis();
@@ -395,7 +402,7 @@ void loop() {
     digitalDisplay();
     display.display(); // Draw the memory buffer
   }
-  
+
   wait(50);
 }
 
@@ -423,7 +430,7 @@ int mins()
     minutes = minutes%60;
     return minutes;
 }
- 
+
 int secs()
 {
     sec = seconds();
@@ -445,7 +452,7 @@ char sep()
     }
     else {
         display.print(" ");
-    }  
+    }
 }
 void digitalDisplay(){
     display.setTextSize(1);
@@ -468,5 +475,3 @@ void digitalDisplay(){
     printDigits(secs());
     display.drawLine(0, display.height()-1, display.width()-1, display.height()-1, WHITE);
 }
-
-
