@@ -93,7 +93,7 @@
 
 // Set WIFI SSID and password
 //#define MY_ESP8266_SSID "TP-LINK_POCKET_3020_473BAF"
-#define  MY_ESP8266_SSID "Alsabox-plus"
+#define  MY_ESP8266_SSID "Maison"
 #define MY_ESP8266_PASSWORD "internet"
 
 // Set the hostname for the WiFi Client. This is the hostname
@@ -101,10 +101,10 @@
 // #define MY_ESP8266_HOSTNAME "mqtt-sensor-gateway"
 
 // Enable MY_IP_ADDRESS here if you want a static ip address (no DHCP)
-#define MY_IP_ADDRESS 192,168,10,86
+#define MY_IP_ADDRESS 192,168,1,86
 
 // If using static ip you need to define Gateway and Subnet address as well
-#define MY_IP_GATEWAY_ADDRESS 192,168,10,1
+#define MY_IP_GATEWAY_ADDRESS 192,168,1,1
 #define MY_IP_SUBNET_ADDRESS 255,255,255,0
 
 
@@ -329,15 +329,18 @@ void loop() {
     lastTempTime = now;
 
     if (dht11.read(DHT11_PIN, &temperature, &humidity, NULL)) {
-      Serial.print("Read DHT11 failed.");
+      Serial.print("Read DHT11 failed.1");
     }
+    //vu qu'on relit l'humidité après alors on fait une pause ici
+    //pour éviter de faire une deuxième lecture trop rapidement
+    wait(1000UL);
 
     #ifdef MY_DEBUG
     Serial.print("T brut: ");
     Serial.println(temperature);
     #endif
     if(isnan(temperature)){
-      Serial.println("Failed reading humidity from DHT");
+      Serial.println("Failed reading temperature from DHT");
     }else{
       temperature = temperature + SENSOR_TEMP_OFFSET;
     }
@@ -366,7 +369,7 @@ void loop() {
     lastHumTime = now;
 
     if (dht11.read(DHT11_PIN, &temperature, &humidity, NULL)) {
-      Serial.print("Read DHT11 failed.");
+      Serial.print("Read DHT11 failed.2");
     }
 
     if(isnan(humidity)){
